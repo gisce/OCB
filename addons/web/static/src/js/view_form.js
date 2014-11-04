@@ -473,11 +473,28 @@ instance.web.FormView = instance.web.View.extend(instance.web.form.FieldManagerM
             }
             // parent field
             var splitted = field.split('.');
-            if (splitted.length > 1 && _.str.trim(splitted[0]) === "parent" && self.dataset.parent_view) {
+            if (splitted.length > 1) {
+                var rec = 0;
+                var ds_rec = null;
+                splitted.forEach(function (val) {
+                    if (val === "parent") {
+                        rec += 1;
+                        if (ds_rec === null) {
+                            ds_rec = self.dataset;
+                        } else {
+                            ds_rec = ds_rec.parent_view.dataset;
+                        }
+                    } else {
+                        return;
+                    }
+                });
                 if (parent_fields === null) {
-                    parent_fields = self.dataset.parent_view.get_fields_values();
+                    parent_fields = {}
                 }
-                var p_val = parent_fields[_.str.trim(splitted[1])];
+                if (parent_fields[rec] === undefined) {
+                    parent_fields[rec] = ds_rec.parent_view.get_fields_values();
+                }
+                var p_val = parent_fields[rec][_.str.trim(splitted[rec])];
                 if (p_val !== undefined) {
                     return p_val == null ? false : p_val;
                 }
