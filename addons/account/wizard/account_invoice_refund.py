@@ -24,6 +24,7 @@ import time
 from openerp.osv import fields, osv
 from openerp.tools.translate import _
 from openerp import netsvc
+from openerp.tools.safe_eval import safe_eval as eval
 
 class account_invoice_refund(osv.osv_memory):
 
@@ -62,7 +63,7 @@ class account_invoice_refund(osv.osv_memory):
             return ''
 
     _defaults = {
-        'date': lambda *a: time.strftime('%Y-%m-%d'),
+        'date': fields.date.context_today,
         'journal_id': _get_journal,
         'filter_refund': 'refund',
         'description': _get_reason,
