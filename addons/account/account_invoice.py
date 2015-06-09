@@ -19,7 +19,6 @@
 #
 ##############################################################################
 
-import time
 from lxml import etree
 import openerp.addons.decimal_precision as dp
 import openerp.exceptions
@@ -831,7 +830,7 @@ class account_invoice(osv.osv):
             for tax in inv.tax_line:
                 if tax.manual:
                     continue
-                key = (tax.tax_code_id.id, tax.base_code_id.id, tax.account_id.id, tax.account_analytic_id.id)
+                key = (tax.tax_code_id.id, tax.base_code_id.id, tax.account_id.id)
                 tax_key.append(key)
                 if not key in compute_taxes:
                     raise osv.except_osv(_('Warning!'), _('Global taxes defined, but they are not in invoice lines !'))
@@ -1313,7 +1312,7 @@ class account_invoice(osv.osv):
         if 'date_p' in context and context['date_p']:
             date=context['date_p']
         else:
-            date=time.strftime('%Y-%m-%d')
+            date=fields.date.context_today(self, cr, uid, context=context)
 
         # Take the amount in currency and the currency of the payment
         if 'amount_currency' in context and context['amount_currency'] and 'currency_id' in context and context['currency_id']:
@@ -1503,6 +1502,7 @@ class account_invoice_line(osv.osv):
             else:
                 return {'value': {'price_unit': 0.0}, 'domain':{'product_uom':[]}}
         part = self.pool.get('res.partner').browse(cr, uid, partner_id, context=context)
+        product_uom_obj = self.pool.get('product.uom')
         fpos_obj = self.pool.get('account.fiscal.position')
         fpos = fposition_id and fpos_obj.browse(cr, uid, fposition_id, context=context) or False
 
@@ -1535,9 +1535,16 @@ class account_invoice_line(osv.osv):
             result.update({'price_unit': res.list_price, 'invoice_line_tax_id': tax_id})
         result['name'] = res.partner_ref
 
-        result['uos_id'] = uom_id or res.uom_id.id
-        if res.description:
-            result['name'] += '\n'+res.description
+        result['uos_id'] = res.uom_id.id
+        if uom_id:
+            uom = product_uom_obj.browse(cr, uid, uom_id)
+            if res.uom_id.category_id.id == uom.category_id.id:
+                result['uos_id'] = uom_id
+
+        if res.description_sale and type and type.startswith('out_'):
+            result['name'] += '\n'+res.description_sale
+        if res.description_purchase and type and type.startswith('in_'):
+            result['name'] += '\n'+res.description_purchase
 
         domain = {'uos_id':[('category_id','=',res.uom_id.category_id.id)]}
 
@@ -1713,13 +1720,10 @@ class account_invoice_tax(osv.osv):
         cur_obj = self.pool.get('res.currency')
         company_obj = self.pool.get('res.company')
         company_currency = False
-        factor = 1
-        if ids:
-            factor = self.read(cr, uid, ids[0], ['factor_tax'])['factor_tax']
         if company_id:
             company_currency = company_obj.read(cr, uid, [company_id], ['currency_id'])[0]['currency_id'][0]
         if currency_id and company_currency:
-            amount = cur_obj.compute(cr, uid, currency_id, company_currency, amount*factor, context={'date': date_invoice or fields.date.context_today(self, cr, uid)}, round=False)
+            amount = cur_obj.compute(cr, uid, currency_id, company_currency, amount, context={'date': date_invoice or fields.date.context_today(self, cr, uid)}, round=False)
         return {'value': {'tax_amount': amount}}
 
     _order = 'sequence'
@@ -1761,14 +1765,14 @@ class account_invoice_tax(osv.osv):
                     val['account_analytic_id'] = tax['account_analytic_paid_id']
 
                 # If the taxes generate moves on the same financial account as the invoice line
-                # and no default analytic account is defined at the tax level, propagate the 
+                # and no default analytic account is defined at the tax level, propagate the
                 # analytic account from the invoice line to the tax line. This is necessary
-                # in situations were (part of) the taxes cannot be reclaimed, 
+                # in situations were (part of) the taxes cannot be reclaimed,
                 # to ensure the tax move is allocated to the proper analytic account.
                 if not val.get('account_analytic_id') and line.account_analytic_id and val['account_id'] == line.account_id.id:
                     val['account_analytic_id'] = line.account_analytic_id.id
 
-                key = (val['tax_code_id'], val['base_code_id'], val['account_id'], val['account_analytic_id'])
+                key = (val['tax_code_id'], val['base_code_id'], val['account_id'])
                 if not key in tax_grouped:
                     tax_grouped[key] = val
                 else:
@@ -1825,10 +1829,10 @@ class res_partner(osv.osv):
             partner = partner.parent_id
         return partner
 
-    def copy(self, cr, uid, id, default=None, context=None):
+    def copy_data(self, cr, uid, id, default=None, context=None):
         default = default or {}
         default.update({'invoice_ids' : []})
-        return super(res_partner, self).copy(cr, uid, id, default, context)
+        return super(res_partner, self).copy_data(cr, uid, id, default=default, context=context)
 
 
 class mail_compose_message(osv.Model):

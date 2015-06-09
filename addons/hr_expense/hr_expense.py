@@ -120,10 +120,10 @@ class hr_expense_expense(osv.osv):
         return super(hr_expense_expense, self).unlink(cr, uid, ids, context)
 
     def onchange_currency_id(self, cr, uid, ids, currency_id=False, company_id=False, context=None):
-        res =  {'value': {'journal_id': False}}
+        res =  {}
         journal_ids = self.pool.get('account.journal').search(cr, uid, [('type','=','purchase'), ('currency','=',currency_id), ('company_id', '=', company_id)], context=context)
         if journal_ids:
-            res['value']['journal_id'] = journal_ids[0]
+            res =  {'value': {'journal_id': journal_ids[0]}}
         return res
 
     def onchange_employee_id(self, cr, uid, ids, employee_id, context=None):
@@ -335,7 +335,7 @@ class hr_expense_expense(osv.osv):
                 is_price_include = tax_obj.read(cr,uid,tax['id'],['price_include'],context)['price_include']
                 if is_price_include:
                     ## We need to deduce the price for the tax
-                    res[-1]['price'] = res[-1]['price']  - (tax['amount'] * tax['base_sign'] or 0.0)
+                    res[-1]['price'] = res[-1]['price'] - tax['amount']
                     # tax amount countains base amount without the tax
                     base_tax_amount = (base_tax_amount - tax['amount']) * tax['base_sign']
                 else:
@@ -346,7 +346,7 @@ class hr_expense_expense(osv.osv):
                              'name':tax['name'],
                              'price_unit': tax['price_unit'],
                              'quantity': 1,
-                             'price':  tax['amount'] * tax['base_sign'] or 0.0,
+                             'price': tax['amount'] or 0.0,
                              'account_id': tax['account_collected_id'] or mres['account_id'],
                              'tax_code_id': tax['tax_code_id'],
                              'tax_amount': tax['amount'] * tax['base_sign'],
